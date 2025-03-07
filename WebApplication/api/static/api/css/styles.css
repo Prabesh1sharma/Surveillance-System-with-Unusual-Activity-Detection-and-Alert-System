@@ -1,0 +1,248 @@
+/* Global Styling */
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f4f9;
+    color: #333;
+}
+
+header {
+    position: fixed;
+    top: 0px;
+    right: 0px;
+    left: 0px;
+    background-color: #734f96;
+    color: white;
+    /* padding: 1rem 1rem; */
+    padding: 5px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    z-index: 5;
+}
+
+header a {
+    text-decoration: none;
+    color: white;
+    margin-left: 1rem;
+    font-weight: bold;
+    transition: color 0.3s ease;
+}
+
+header a:hover {
+    color: #ddd;
+}
+
+/* Container Styling */
+.container {
+    max-width: 1500px;
+    margin: 100px 10px 50px 10px;
+    padding: 1rem;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    text-align: center; /* Center all content inside the container */
+}
+
+.container h2 {
+    margin-bottom: 5px;
+    color: #734f96;
+}
+.container h1 {
+    margin-bottom: 15px;
+    color: #734f96;
+}
+.container h3 {
+    margin: 8px;
+    color: #734f96;
+}
+
+/* Buttons */
+button {
+    background: #734f96;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    font-size: 1rem;
+    display: block; /* Ensure buttons are block-level */
+    margin: 5px auto; /* Center the button */
+}
+
+button:hover {
+    background: #562c72;
+}
+a{
+    text-decoration: none;
+}
+/* OTP Display Styling */
+.otp-container {
+    text-align: center;
+    background: #fff;
+    margin: 5px;
+    padding: 5px; /* Reduced padding */
+    border: 1px solid #ddd;
+    border-radius: 8px; /* Slightly smaller corners */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    display: inline-block;
+    max-width: 300px; /* Reduced width for the box */
+}
+
+.otp-display {
+    font-size: 1.5rem; /* Reduced font size */
+    color: #734f96;
+    margin: 0.5rem 0; /* Reduced margin */
+    font-weight: bold;
+    border: 2px dashed #734f96;
+    padding: 0.5rem; /* Reduced padding */
+    border-radius: 5px;
+    background: #f9f7fc;
+}
+
+/* Input Field */
+#otpInput {
+    font-size: 1.5rem; /* Match font size with otp-display */
+    color: #734f96; /* Match text color */
+    font-weight: bold;
+    border: none; /* Same border style */
+    padding: none; /* Consistent padding */
+    background: #f9f7fc; /* Same background */
+    width: 100%; /* Full width inside the container */
+    box-sizing: border-box; /* Ensure padding doesn't overflow */
+    outline: none; /* Remove default focus outline */
+    text-align: center; /* Center the entered text */
+}
+
+#otpInput:focus {
+    border-color: #562c72; /* Slightly darker border on focus */
+    background: #f4f1fa; /* Subtle background change */
+}
+
+
+/* Video Styling */
+video {
+    display: block;
+    width: 480px;
+    height: auto;
+    border-radius: 8px;
+    margin: 1rem auto;
+    border: 1px solid #ddd;
+}
+
+/* Grid and Card Styling */
+/* Grid Layout */
+.grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem; /* More spacing between cards */
+    justify-content: center; /* Center align cards */
+}
+
+/* Card Styling */
+.card {
+    flex: 1 1 calc(33.333% - 2rem); /* Ensures 3 cards per row */
+    min-width: 350px; /* Restrict min width for better layout */
+    min-height: 150px;
+    background: #e9e8e8;
+    border: 3px solid #ddd;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Stronger shadow */
+    padding: 25px;
+    text-align: center;
+    margin: 20px 45px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Hover Effect */
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+}
+
+/* Card Content */
+.card h3 {
+    color: #734f96;
+    margin-bottom: 0.75rem;
+    font-size: 1.3rem;
+}
+
+.card p {
+    color: #555;
+    margin: 0.5rem 0 1rem;
+    font-size: 1rem;
+}
+
+/* Button inside Card */
+.card button {
+    background: #734f96;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    font-size: 1rem;
+}
+
+.card button:hover {
+    background: #562c72;
+    transform: scale(1.05);
+}
+
+
+/* Clips and Notifications */
+.clip, .notification {
+    background: #fafafa;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem auto; /* Center the clips and notifications */
+    transition: background-color 0.3s ease;
+    text-align: left; /* Optional: Left-align content within clips */
+    max-width: 500px; /* Optional: Restrict the width for better readability */
+}
+
+.clip:hover, .notification:hover {
+    background: #f0f0f0;
+}
+
+.clip h4, .notification strong {
+    color: #734f96;
+}
+
+.clip p, .notification p {
+    color: #555;
+    margin-top: 0.5rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .grid {
+        flex-direction: column;
+    }
+
+    .card {
+        flex: 1 1 100%;
+    }
+
+    .container {
+        padding: 1.5rem;
+    }
+}
+
+footer {
+    text-align: center;
+    padding: 0.75rem; /* Reduced padding */
+    background: #734f96;
+    color: white;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    font-size: 0.85rem; /* Slightly smaller font size */
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1); /* Add shadow for separation */
+}

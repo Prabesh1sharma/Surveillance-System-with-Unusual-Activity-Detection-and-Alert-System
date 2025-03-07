@@ -1,0 +1,392 @@
+{% extends 'api/base.html' %}
+
+{% block content %}
+<div id="surveillance" class="container">
+    <h2>Surveillance</h2>
+    <div class="toggle">
+        <span class="alert-text">ALERT: <span class='onoff'>OFF</span></span>
+        <label class="switch">
+            <input type="checkbox" id="toggleSwitch" onchange="toggleAlert()">
+            <span class="slider"></span>
+        </label>
+        <span class='onoff'>ON</span>
+    </div>    
+    
+    <div id="alertBox" style="display: none; background: lightcoral; padding: 10px; margin-top: 10px;">
+        ⚠️ Alert! Something happened.
+    </div>
+    
+    <video id="surveillanceVideo" autoplay playsinline></video>
+    
+    <div id="predictionResult" class="mt-4">
+        <div class="result-box p-4 border rounded">
+            <h3>VIDEO ANALYSIS RESULT:</h3>
+            <hr>
+            <div id="classificationStatus" class="text-xl font-bold mb-2">Awaiting analysis...</div>
+            <div id="confidenceScores" class="text-lg"></div>
+            <div id="lastUpdateTime" class="text-sm text-gray-600 mt-2"></div>
+            <div id="analysisSource" class="text-sm text-blue-600 mt-1">Results will appear here from live stream</div>
+        </div>
+    </div>
+    
+    <form method="GET" action="/" class="mt-4">
+        {% csrf_token %}
+        <button type="submit" class="px-4 py-2 bg-red-500 text-white rounded">Leave Stream</button>
+    </form>
+</div>
+
+<style>
+    .toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 20px;
+        border-radius: 1px;
+        font-weight: bold;
+    }
+    .onoff{
+        margin: 0px 6px;
+    }
+    #toggleSwitch{
+        z-index: 4;
+    }
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 50px;
+        height: 25px;
+    }
+    
+    .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 25px;
+    }
+    
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 4px;
+        bottom: 3px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+    
+    input:checked + .slider {
+        background-color: #734f96;
+    }
+    
+    input:checked + .slider:before {
+        transform: translateX(24px);
+    }
+    
+    /* Result Box */
+    .result-box {
+        background-color: #f9f7fc; /* Soft background matching theme */
+        margin: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    
+    /* Status Colors */
+    .normal-status {
+        color: #16a34a; /* Green-600 */
+        font-weight: bold;
+    }
+    .abnormal-status {
+        color: #dc2626; /* Red-600 */
+        font-weight: bold;
+    }
+    #classificationStatus{
+        font-size: 22px
+
+    };
+    
+    /* Alert Modal Styles */
+    .alert-modal {
+        align-items: center;
+        justify-content: center;
+    }
+    .alert-modal.show {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        display: flex;
+        opacity: 1;
+    }
+    
+    .modal-content {
+        background: #fff;
+        padding: 2rem;
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 0 20px rgba(0,0,0,0.2);
+        max-width: 400px;
+    }
+    
+    .modal-content h2 {
+        color: #dc2626;
+        margin-bottom: 1rem;
+    }
+    
+    .modal-content button {
+        background: #734f96; /* Matching theme */
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 1rem;
+        transition: background 0.3s ease;
+    }
+    .modal-content button:hover {
+        background: #562c72; /* Darker shade on hover */
+    }    
+</style>
+{% endblock %}
+
+{% block js %}
+<script>
+const surveillanceVideo = document.getElementById("surveillanceVideo");
+const classificationStatus = document.getElementById("classificationStatus");
+const confidenceScores = document.getElementById("confidenceScores");
+const lastUpdateTime = document.getElementById("lastUpdateTime");
+const analysisSource = document.getElementById("analysisSource");
+const sessionId = "{{ session_id }}";
+const webSocketUrl = `ws://${window.location.host}/ws/surveillance/${sessionId}/`;
+
+let peerConnection = null;
+let surveillanceSocket = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+
+const iceConfig = {
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+};
+
+function initializeWebSocket(url) {
+    const socket = new WebSocket(url);
+
+    socket.onopen = () => {
+        console.log("WebSocket connection established for surveillance.");
+        socket.send(JSON.stringify({ type: 'viewer_ready' }));
+    };
+
+    socket.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
+        console.log("Received WebSocket message:", data);
+
+        if (data.type === "offer") {
+            await handleOffer(data.offer);
+        } else if (data.type === "candidate") {
+            await handleCandidate(data.candidate);
+        } else if (data.type === "analysis_result") {
+            // Handle analysis results received via WebSocket
+            displayPredictionResult(data.data);
+            analysisSource.textContent = "Results from livestream analysis";
+        }
+    };
+
+    socket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+    };
+
+    socket.onclose = () => {
+        console.log("WebSocket connection closed.");
+        setTimeout(() => {
+            console.log("Attempting to reconnect...");
+            surveillanceSocket = initializeWebSocket(webSocketUrl);
+        }, 5000);
+    };
+
+    return socket;
+}
+
+function playFireAlertSound() {
+    const context = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Create two oscillators for alternating tones
+    const oscillator1 = context.createOscillator();
+    const oscillator2 = context.createOscillator();
+    const gainNode1 = context.createGain();
+    const gainNode2 = context.createGain();
+
+    oscillator1.connect(gainNode1);
+    oscillator2.connect(gainNode2);
+    gainNode1.connect(context.destination);
+    gainNode2.connect(context.destination);
+
+    // Configure oscillators (square wave for harsh alarm sound)
+    oscillator1.type = 'square';
+    oscillator2.type = 'square';
+    oscillator1.frequency.setValueAtTime(800, context.currentTime);  // Higher pitch
+    oscillator2.frequency.setValueAtTime(1200, context.currentTime); // Alternating pitch
+
+    // Start muted initially
+    gainNode1.gain.setValueAtTime(0, context.currentTime);
+    gainNode2.gain.setValueAtTime(0, context.currentTime);
+
+    // Schedule alternating beeps (fire alarm pattern)
+    const startTime = context.currentTime;
+    const duration = 5; // Total sound duration in seconds
+
+    for (let t = 0; t < duration; t += 0.3) {
+        // Alternate between the two tones every 0.3 seconds
+        gainNode1.gain.setValueAtTime((t % 0.6 < 0.3) ? 0.5 : 0, startTime + t);
+        gainNode2.gain.setValueAtTime((t % 0.6 >= 0.3) ? 0.5 : 0, startTime + t);
+    }
+
+    // Start and stop oscillators
+    oscillator1.start(startTime);
+    oscillator2.start(startTime);
+    oscillator1.stop(startTime + duration);
+    oscillator2.stop(startTime + duration);
+}
+
+function displayPredictionResult(resultData) {
+    console.log("Displaying analysis result:", resultData);
+    
+    // Update status display
+    const status = resultData.status;
+    classificationStatus.textContent = `Current Status: ${status.charAt(0).toUpperCase() + status.slice(1)}`;
+    
+    // Set color based on status
+    classificationStatus.className = status === 'normal' 
+        ? 'normal-status' 
+        : 'abnormal-status';
+
+    // Display confidence scores
+    confidenceScores.innerHTML = resultData.predictions.map(pred => 
+        `<div>${pred.label}: ${(pred.score * 100).toFixed(2)}% confidence</div>`
+    ).join('');
+
+    // Show pop-up alert for abnormal status
+    if (status === 'abnormal') {
+        showAlertModal(
+            "Abnormal Activity Detected!", 
+            `Highest confidence: ${(resultData.predictions[0].score * 100).toFixed(2)}%`,
+            resultData.highest_frame.frame_number
+        );
+    }
+
+    // Update timestamp
+    lastUpdateTime.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+}
+
+// Custom alert modal function
+function showAlertModal(title, confidence, frameNumber) {
+    // Create modal elements
+    const modal = document.createElement('div');
+    modal.className = 'alert-modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h2>⚠️ ${title}</h2>
+            <p>Confidence: ${confidence}</p>
+            <p>Frame Number: ${frameNumber}</p>
+            <p>Please check the telegram, frame is sent to you </p>
+            <button onclick="this.parentElement.parentElement.remove()">Dismiss</button>
+        </div>
+    `;
+    const toggleSwitch = document.getElementById("toggleSwitch");
+
+    if (toggleSwitch.checked){
+        playFireAlertSound();
+        // Add to body and animate
+        document.body.appendChild(modal);
+        setTimeout(() => modal.classList.add('show'), 10);
+    }
+}
+
+function createPeerConnection() {
+    if (peerConnection) {
+        peerConnection.close();
+    }
+    
+    peerConnection = new RTCPeerConnection(iceConfig);
+
+    peerConnection.ontrack = (event) => {
+        console.log("Received remote stream:", event.streams[0]);
+        if (surveillanceVideo.srcObject !== event.streams[0]) {
+            surveillanceVideo.srcObject = event.streams[0];
+        }
+    };
+
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            console.log("Sending ICE candidate to streamer");
+            surveillanceSocket.send(JSON.stringify({
+                type: "candidate",
+                candidate: event.candidate,
+            }));
+        }
+    };
+
+    peerConnection.oniceconnectionstatechange = () => {
+        console.log("ICE Connection State:", peerConnection.iceConnectionState);
+    };
+}
+
+async function handleOffer(offer) {
+    try {
+        if (!peerConnection) {
+            createPeerConnection();
+        }
+
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        console.log("Set remote description success");
+        
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        console.log("Created and set local answer");
+
+        surveillanceSocket.send(JSON.stringify({
+            type: "answer",
+            answer: answer
+        }));
+    } catch (error) {
+        console.error("Error handling offer:", error);
+    }
+}
+
+async function handleCandidate(candidate) {
+    try {
+        if (!peerConnection) {
+            createPeerConnection();
+        }
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log("Added ICE candidate successfully");
+    } catch (error) {
+        console.error("Error adding ICE candidate:", error);
+    }
+}
+
+function startSurveillance() {
+    surveillanceSocket = initializeWebSocket(webSocketUrl);
+    createPeerConnection();
+}
+
+startSurveillance();
+</script>
+{% endblock %}

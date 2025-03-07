@@ -1,0 +1,19 @@
+{% extends 'api/base.html' %}
+
+{% block content %}
+
+<div id="surveillance" class="container">
+    <h2>Surveillance</h2>
+    <p>Enter the OTP to join a live stream:</p>
+    <form method="POST" action="/find-session-by-otp/">
+        {% csrf_token %}
+        <div class="otp-container">
+            <div class="otp-display" id="otpBox">
+                <input type="text" name='otpInput' placeholder="Enter OTP" id="otpInput" required>
+            </div>
+        </div>
+        <button type="submit">Join Stream</button>
+    </form>
+</div>
+{% endblock %} 
+

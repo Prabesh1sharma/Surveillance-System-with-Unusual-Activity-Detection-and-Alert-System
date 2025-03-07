@@ -1,0 +1,18 @@
+{% extends 'api/base.html' %}
+
+{% block content %}
+<div id="liveStream" class="container">
+    <h1>Live Stream</h1>
+    <h3>Go Live to Generate OTP</h3>
+    <div class="otp-container" id=" otp-container-filled">
+        <div class="otp-display" id="otpBox">- - - - - - </div>
+    </div>
+    <div id='go_live'>
+        <form method="POST" action="/create-session/" id="go_live_form">
+            {% csrf_token %}
+            <button id="startLiveStreamBtn" type="submit">Go Live</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

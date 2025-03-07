@@ -1,0 +1,302 @@
+{% extends 'api/base.html' %}
+
+{% block content %}
+
+<div id="liveStream" class="container">
+    <h3>Live Stream OTP : </h3>
+    <div class="otp-container" id=" otp-container-filled">
+        <div class="otp-display" id="otpBox">{{ otp }}</div>
+    </div>
+    <video id="liveStreamVideo" autoplay muted></video> <!-- Video element for streaming -->
+    <!-- Add a simple indicator to show analysis is happening -->
+    <div id="processingIndicator" class="mt-4" style="display: none;">
+        <span class="processing-badge">Video Analysis in Progress...</span>
+    </div>
+    <div id="end_live">
+        <form method="POST" action="/terminate-session/{{ session_id }}/">
+            {% csrf_token %}
+            <button id="stopLiveStreamBtn" type="submit">End Live</button>
+        </form>
+    </div>
+</div>
+
+<style>
+    /* Processing Badge */
+    .processing-badge {
+        background: linear-gradient(
+            45deg,
+            rgb(102, 51, 153),   /* Rich Lavender */
+            rgb(124, 77, 167),   /* Slightly softer lavender */
+            rgb(147, 99, 181),   /* More balanced lavender */
+            rgb(169, 121, 195),  /* Soft Lavender */
+            rgb(191, 143, 209),  /* Midway between soft & pastel */
+            rgb(213, 165, 223),  /* More blended pastel lavender */
+            rgb(235, 189, 237),  /* Subtle neutral transition */
+            rgb(249, 244, 252),  /* Soft Lavender Blend */
+            rgb(238, 221, 253),  /* Final Lavender */
+            rgb(249, 244, 252),  /* Soft Lavender Blend */
+            rgb(235, 189, 237),  /* Subtle neutral transition */
+            rgb(213, 165, 223),  /* More blended pastel lavender */
+            rgb(191, 143, 209),  /* Midway between soft & pastel */
+            rgb(169, 121, 195),  /* Soft Lavender */
+            rgb(147, 99, 181),   /* More balanced lavender */
+            rgb(124, 77, 167)    /* Slightly softer lavender */
+            
+        );
+        
+        background-size: 200% 100%; /* Makes animation more noticeable */
+        animation: shimmer 1.8s infinite linear;
+
+        color: white;
+        text-shadow: 
+            -0.5px -0.5px 0 black,  
+            0.5px -0.5px 0 black,
+            -0.5px  0.5px 0 black,
+            0.5px  0.5px 0 black; /* Creates a border effect */
+        
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-weight: bold;
+        margin: 10px 0; /* Ensures spacing from above & below */
+        display: inline-block; /* Ensures proper spacing */
+    }
+
+    /* Shimmer Animation */
+    @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
+
+</style>
+{% endblock %} 
+
+{% block js %}
+<script>
+    const liveStreamVideo = document.getElementById('liveStreamVideo');
+    const processingIndicator = document.getElementById('processingIndicator');
+    const sessionId = "{{ session_id }}";
+    console.log("Session ID:", sessionId);
+    const webSocketUrl = `ws://${window.location.host}/ws/live-stream/${sessionId}/`;
+    
+    let localStream = null;
+    let peerConnection = null;
+    let liveStreamSocket = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+
+    const iceConfig = {
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    };
+
+    function initializeWebSocket(url) {
+        const socket = new WebSocket(url); 
+  
+        socket.onopen = () => {
+            console.log('WebSocket connection established');
+        };
+
+        socket.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+            console.log("Received WebSocket message:", data);
+
+            if (data.type === 'viewer_ready') {
+                // Create and send offer when viewer connects
+                try {
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    socket.send(JSON.stringify({
+                        type: 'offer',
+                        offer: offer
+                    }));
+                } catch (error) {
+                    console.error('Error creating offer:', error);
+                }
+            } else if (data.type === 'answer') {
+                try {
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                } catch (error) {
+                    console.error('Error setting remote description:', error);
+                }
+            } else if (data.type === 'candidate') {
+                handleCandidate(data.candidate);
+            }
+        };
+
+        socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+
+        socket.onclose = () => {
+            console.log('WebSocket connection closed.');
+        };
+        
+        return socket;
+    }
+
+    async function startVideo() {
+        try {
+            // Access user's media devices (camera and microphone)
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                video: true, 
+                audio: true 
+            });
+            liveStreamVideo.srcObject = localStream;
+
+            // Initialize WebSocket connection
+            liveStreamSocket = initializeWebSocket(webSocketUrl);
+
+            // Create and configure WebRTC peer connection
+            createPeerConnection(); 
+            
+            // Start periodic recording for video analysis
+            startPeriodicRecording();
+        } catch (error) {
+            console.error('Error starting video:', error);
+        }
+    } 
+
+    function createPeerConnection() {
+        peerConnection = new RTCPeerConnection(iceConfig);
+
+        // Add local stream tracks to the peer connection
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+
+        // Handle ICE candidate event
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                console.log('Sending ICE candidate');
+                liveStreamSocket.send(JSON.stringify({
+                    type: 'candidate',
+                    candidate: event.candidate,
+                }));
+            }
+        };
+
+        peerConnection.oniceconnectionstatechange = () => {
+            console.log("ICE Connection State:", peerConnection.iceConnectionState);
+        };
+
+        // Log streaming status
+        peerConnection.onconnectionstatechange = () => {
+            console.log("Connection State:", peerConnection.connectionState);
+        };
+    }
+
+    async function handleOffer(offer) {
+        try {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+
+            liveStreamSocket.send(JSON.stringify({
+                type: 'answer',
+                answer: answer
+            }));
+        } catch (error) {
+            console.error('Error handling offer:', error);
+        }
+    }
+
+    async function handleCandidate(candidate) {
+        try {
+            if (peerConnection && peerConnection.remoteDescription) {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+        } catch (error) {
+            console.error('Error adding ICE candidate:', error);
+        }
+    }
+
+    // Functions for video processing
+    function startPeriodicRecording() {
+        // Start first recording after a short delay
+        setTimeout(() => {
+            startRecording(localStream);
+        }, 3000);
+        
+        // Then schedule periodic recordings
+        setInterval(() => {
+            if (localStream && (!mediaRecorder || mediaRecorder.state !== 'recording')) {
+                console.log("Starting new recording...");
+                startRecording(localStream);
+            }
+        }, 5000); // Record every 15 seconds
+    }
+    
+    function startRecording(stream) {
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream, {
+            mimeType: 'video/webm;codecs=vp8,opus'
+        });
+
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                recordedChunks.push(event.data);
+            }
+        };
+
+        mediaRecorder.onstop = async () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            processingIndicator.style.display = 'block';
+            await sendVideoForProcessing(blob);
+        };
+
+        mediaRecorder.start();
+        setTimeout(() => {
+            if (mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+        }, 5000); // Record 5 seconds of video
+    }
+
+    async function sendVideoForProcessing(blob) {
+        const formData = new FormData();
+        formData.append('video', blob, 'clip.webm');
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        formData.append('source', 'livestream');
+
+        try {
+            processingIndicator.style.display = 'block';
+            
+            const response = await fetch('/process_video/', {
+                method: 'POST',
+                body: formData,
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            // Check if the response contains both status and predictions
+            if (result.status && result.predictions) {
+                // Send analysis results via WebSocket instead of BroadcastChannel
+                liveStreamSocket.send(JSON.stringify({
+                    type: 'analysis_result',
+                    data: result
+                }));
+                console.log("Analysis result sent to server via WebSocket");
+            } else {
+                throw new Error('Invalid response format');
+            }
+            
+            // Hide processing indicator after a short delay
+            setTimeout(() => {
+                processingIndicator.style.display = 'none';
+            }, 2000);
+            
+        } catch (error) {
+            console.error('Error processing video:', error);
+            processingIndicator.style.display = 'none';
+        }
+    }
+
+    // Start the video and WebSocket connection on page load
+    startVideo().catch(error => {
+        console.error('Error in startVideo:', error);
+    });
+</script>
+{% endblock %}
