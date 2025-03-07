@@ -131,12 +131,6 @@ The development process and model experimentation are documented in the notebook
 - **ExperimentsNotebook**: Contains data analysis, feature engineering, and algorithm selection experiments
 - **TrainedNotebook**: Documents the training process, model evaluation, and optimization techniques
 
-## Future Enhancements
-
-- Integration with additional notification services
-- Support for PTZ (Pan-Tilt-Zoom) camera controls
-- Advanced filtering options for alert categorization
-- Cloud-based deployment architecture
 
 ---
 
